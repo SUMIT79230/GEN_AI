@@ -9,11 +9,9 @@ import google.generativeai as genai
 import time
 
 st.set_page_config(page_title="Gen_AI Session")
+
 # Configure API Key
 genai.configure(api_key=os.getenv("API_KEY"))
-
-# for model in genai.list_models():
-#     print(model.name);
 
 # Fix CSS Styling
 st.markdown(
@@ -35,20 +33,25 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-available_model = ["gemini-pro","gemini-1.5-flash","gemini-1.5-pro-latest"]
-selected_model = st.selectbox("Select Model : ",available_model,index = 0)
+available_model = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro-latest"]
+selected_model = st.selectbox("Select Model:", available_model, index=0)
 
 # Initialize Gemini Model
 model = genai.GenerativeModel(selected_model)
 
-# Function to get response with streaming from gemini_pro
+# Function to get response with streaming
 def get_response_gemini_pro(question):
-    response = model.generate_content(question, stream=True)  
-    return response 
+    response = model.generate_content(question, stream=True)
+    
+    full_response = ""
+    for chunk in response:
+        if chunk.text:
+            full_response += chunk.text
+            yield full_response  # Yield updated response progressively
 
-# Function to get response with streaming from gemini_pro_vision
+# Function to get response with streaming (for images)
 def get_response_gemini_flash(input_text, image):
-    if image is not None:
+    if image:
         image_bytes = io.BytesIO(image.getvalue())
         image_data = Image.open(image_bytes)
     else:
@@ -57,56 +60,52 @@ def get_response_gemini_flash(input_text, image):
     if not input_text:
         input_text = "Describe the image."
 
-    # Send both text and image if available
     content = [input_text, image_data] if image_data else input_text
-    response = model.generate_content(content)
+    response = model.generate_content(content, stream=True)
 
-    return response.text if hasattr(response, "text") else str(response)
+    full_response = ""
+    for chunk in response:
+        if chunk.text:
+            full_response += chunk.text
+            yield full_response  # Yield updated response progressively
 
 # Set up Streamlit UI
 if selected_model == "gemini-pro":
     st.header("Gemini Pro - Advanced Text Generation")
     user_input = st.text_input("Input:", key="Input")
     submit = st.button("Ask Your Question")
-    # Process input and generate response
+
     if submit and user_input:
         st.subheader("The Response is:")
-        response_stream = get_response_gemini_pro(user_input) 
-        response_container = st.empty()  
+        response_container = st.empty()
 
-        full_response = ""  # Store complete response
-        for chunk in response_stream:
-            full_response += chunk
-            response_container.write(full_response) 
-            
+        with st.spinner("Processing... Please wait"):
+            for chunk in get_response_gemini_pro(user_input):
+                response_container.write(chunk)
+
 elif selected_model == "gemini-1.5-flash":
-    
     st.header("Gemini Pro Vision - Image to Text Processing")
     user_input = st.text_input("Input:", key="Input")
-    uploaded_file = st.file_uploader("Choose an image...",type = ["jpg","jpeg","png"])
-    if uploaded_file is not None:
+    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file:
         image = Image.open(uploaded_file)
-        st.image(image,caption = "Uploaded Image ",use_container_width = True)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
+
     submit = st.button("Process Image for Insights")
-    # Process input and generate response
+
     if submit:
-        if uploaded_file is None and not user_input:
+        if not uploaded_file and not user_input:
             st.error("Please provide either an image or text input.")
         else:
-            st.subheader("The Response is :")
-            response_container = st.empty() 
-            
-            with st.spinner("Processing... Please wait"): 
-                time.sleep(1) 
-                response_stream = get_response_gemini_flash(user_input, uploaded_file)
-            
-            full_response = "" 
-            for chunk in response_stream:
-                full_response += chunk
-                response_container.write(full_response)
-                
+            st.subheader("The Response is:")
+            response_container = st.empty()
+
+            with st.spinner("Processing... Please wait"):
+                for chunk in get_response_gemini_flash(user_input, uploaded_file):
+                    response_container.write(chunk)
+
 elif selected_model == "gemini-1.5-pro-latest":
     st.header("Gemini 1.5 Pro - Cutting-Edge Multimodal AI")
     user_input = st.text_input("Input:", key="Input")
     submit = st.button("Ask Your Question")
-
