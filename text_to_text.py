@@ -6,23 +6,26 @@ import streamlit as st
 import io
 import os
 import google.generativeai as genai
-import time
 
-st.set_page_config(page_title="Gen_AI Session")
+st.set_page_config(page_title="Gen_AI Session", layout="wide")
 
 # Configure API Key
-genai.configure(api_key=os.getenv("API_KEY"))
+api_key = os.getenv("API_KEY")
+if not api_key:
+    st.error("API Key is missing! Please check your environment variables.")
+else:
+    genai.configure(api_key=api_key)
 
 # Fix CSS Styling
 st.markdown(
     """
     <style>
     div[data-baseweb="select"] {
-        width: 150px !important;  
+        width: 200px !important;  
     }
     .uploaded-image {
-        width: 100px;  
-        height: 100px; 
+        width: 120px;  
+        height: 120px; 
         object-fit: cover;
         border-radius: 10px; 
         display: block;
@@ -33,7 +36,8 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-available_model = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro-latest"]
+# available_model = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro-latest"]
+available_model = ["gemini-pro", "gemini-1.5-flash"]
 selected_model = st.selectbox("Select Model:", available_model, index=0)
 
 # Initialize Gemini Model
@@ -45,17 +49,21 @@ def get_response_gemini_pro(question):
     
     full_response = ""
     for chunk in response:
-        if chunk.text:
+        if hasattr(chunk, "text"):  # Check if chunk contains text
             full_response += chunk.text
             yield full_response  # Yield updated response progressively
 
 # Function to get response with streaming (for images)
 def get_response_gemini_flash(input_text, image):
+    image_data = None
+
     if image:
-        image_bytes = io.BytesIO(image.getvalue())
-        image_data = Image.open(image_bytes)
-    else:
-        image_data = None
+        try:
+            image_bytes = io.BytesIO(image.getvalue())
+            image_data = Image.open(image_bytes)
+        except Exception as e:
+            st.error(f"Error processing image: {e}")
+            return
 
     if not input_text:
         input_text = "Describe the image."
@@ -65,14 +73,16 @@ def get_response_gemini_flash(input_text, image):
 
     full_response = ""
     for chunk in response:
-        if chunk.text:
+        if hasattr(chunk, "text"):  # Ensure chunk has text
             full_response += chunk.text
             yield full_response  # Yield updated response progressively
 
 # Set up Streamlit UI
+st.divider()  # Add a divider for better UI separation
+
 if selected_model == "gemini-pro":
     st.header("Gemini Pro - Advanced Text Generation")
-    user_input = st.text_input("Input:", key="Input")
+    user_input = st.text_area("Enter your question:", key="Input")
     submit = st.button("Ask Your Question")
 
     if submit and user_input:
@@ -84,9 +94,9 @@ if selected_model == "gemini-pro":
                 response_container.write(chunk)
 
 elif selected_model == "gemini-1.5-flash":
-    st.header("Gemini Pro Vision - Image to Text Processing")
-    user_input = st.text_input("Input:", key="Input")
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    st.header("Gemini 1.5 Flash - Image & Text Processing")
+    user_input = st.text_area("Enter your question (optional):", key="Input")
+    uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file:
         image = Image.open(uploaded_file)
@@ -106,6 +116,16 @@ elif selected_model == "gemini-1.5-flash":
                     response_container.write(chunk)
 
 elif selected_model == "gemini-1.5-pro-latest":
-    st.header("Gemini 1.5 Pro - Cutting-Edge Multimodal AI")
-    user_input = st.text_input("Input:", key="Input")
-    submit = st.button("Ask Your Question")
+    st.header("Gemini 1.5 Pro - Cutting-Edge AI")
+    user_input = st.text_area("Enter your question:", key="Input")
+    submit = st.button(" Ask Your Question ")
+
+    if submit and user_input:
+        st.subheader("The Response is:")
+        response_container = st.empty()
+
+        with st.spinner("Processing... Please wait"):
+            for chunk in get_response_gemini_pro(user_input):
+                response_container.write(chunk)
+
+st.divider()  # Add a closing divider for better UI separation
