@@ -76,7 +76,7 @@ if selected_model == "gemini-pro":
 
         full_response = ""  # Store complete response
         for chunk in response_stream:
-            full_response += chunk.text  
+            full_response += chunk
             response_container.write(full_response) 
             
 elif selected_model == "gemini-1.5-flash":
