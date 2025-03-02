@@ -12,9 +12,9 @@ st.set_page_config(page_title="Gen_AI Session", layout="wide")
 # Configure API Key
 api_key = os.getenv("API_KEY")
 if not api_key:
-    st.error("API Key is missing! Please check your environment variables.")
-else:
-    genai.configure(api_key=api_key)
+    raise ValueError("API Key is missing! Please check your environment variables.")
+
+genai.configure(api_key=api_key)
 
 # Fix CSS Styling
 st.markdown(
@@ -24,8 +24,8 @@ st.markdown(
         width: 200px !important;  
     }
     .uploaded-image {
-        width: 120px;  
-        height: 120px; 
+        width: 100px;  
+        height: 100px; 
         object-fit: cover;
         border-radius: 10px; 
         display: block;
@@ -36,22 +36,35 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# available_model = ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro-latest"]
-available_model = ["gemini-pro", "gemini-1.5-flash"]
+# available_model = ["gemini-1.5-pro-latest"", "gemini-1.5-flash"]
+available_model = ["gemini-1.5-pro-latest", "gemini-1.5-flash"]
 selected_model = st.selectbox("Select Model:", available_model, index=0)
 
 # Initialize Gemini Model
-model = genai.GenerativeModel(selected_model)
+try:
+    model = genai.GenerativeModel(selected_model)
+except Exception as e:
+    print(f"Error initializing model: {e}")
 
 # Function to get response with streaming
 def get_response_gemini_pro(question):
-    response = model.generate_content(question, stream=True)
-    
-    full_response = ""
-    for chunk in response:
-        if hasattr(chunk, "text"):  # Check if chunk contains text
-            full_response += chunk.text
-            yield full_response  # Yield updated response progressively
+    try:
+        response = model.generate_content(question, stream=True)
+
+        if not hasattr(response, "__iter__"):  # Ensure response is iterable
+            yield "Error: Response is not iterable. Try removing stream=True."
+            return
+        
+        full_response = ""
+        for chunk in response:
+            text = getattr(chunk, "text", None)  # Safely get text
+            if text:
+                full_response += text
+                yield full_response  # Yield progressively
+
+    except Exception as e:
+        yield f"Error: {e}"  # Handle API errors gracefully
+
 
 # Function to get response with streaming (for images)
 def get_response_gemini_flash(input_text, image):
@@ -94,7 +107,7 @@ if selected_model == "gemini-pro":
                 response_container.write(chunk)
 
 elif selected_model == "gemini-1.5-flash":
-    st.header("Gemini 1.5 Flash - Image & Text Processing")
+    st.header("Image & Text Processing")
     user_input = st.text_area("Enter your question (optional):", key="Input")
     uploaded_file = st.file_uploader("Upload an image...", type=["jpg", "jpeg", "png"])
 
@@ -116,7 +129,7 @@ elif selected_model == "gemini-1.5-flash":
                     response_container.write(chunk)
 
 elif selected_model == "gemini-1.5-pro-latest":
-    st.header("Gemini 1.5 Pro - Cutting-Edge AI")
+    st.header("Query Processing")
     user_input = st.text_area("Enter your question:", key="Input")
     submit = st.button(" Ask Your Question ")
 
